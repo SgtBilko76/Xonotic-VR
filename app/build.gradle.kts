@@ -11,8 +11,8 @@ android {
         applicationId = "com.sgtbilko.xonoticquest"
         minSdk = 26
         targetSdk = 32
-        versionCode = 10
-        versionName = "0.4.0"
+        versionCode = 11
+        versionName = "0.5.0"
 
         externalNativeBuild {
             cmake {

@@ -9,11 +9,12 @@ PROJ=$(cd "$(dirname "$0")/.." && pwd)
 DIST=${DIST:-$(cd "$PROJ/.." && pwd)/dist}
 BT=${ANDROID_HOME:-$HOME/Android/Sdk}/build-tools/34.0.0
 LEAN=$PROJ/app/build/outputs/apk/release/app-release.apk
-OUT=$DIST/XonoticQuest-full-release.apk
+OUT=$DIST/Xonotic-VR-full-release.apk
 TMP=$DIST/.full-unsigned.apk
 mkdir -p "$DIST/.javatmp"   # apksigner needs ~1.2GB of temp space; /tmp is a small tmpfs
 
-( cd "$PROJ" && gradle assembleRelease --no-daemon -q )
+# the wrapper, not a bare "gradle" - this machine has no gradle on PATH
+( cd "$PROJ" && ./gradlew assembleRelease --no-daemon -q )
 python3 - "$LEAN" "$TMP" "$DIST/bundled-assets" <<'PY'
 import sys, zipfile, os
 lean, out, assets = sys.argv[1:]
