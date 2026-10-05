@@ -103,6 +103,16 @@ cvar_t r_reflectcube = {CF_CLIENT | CF_ARCHIVE, "r_reflectcube","1", "environmen
 // stage (chrome/glass/metal trim materials) - a different mechanism entirely, unaffected by
 // r_reflectcube. In VR this reads the same way (sky/background reflected on walls), so give it
 // its own switch (VR: user-reported 2026-09-16, r_reflectcube alone did not fix it).
+#ifdef VR_QUEST
+// Drawing every leaf in the map that survives frustum culling (vr_novis 1) was the 2026-09-16
+// workaround for the sky showing through nearby walls, but it is expensive: the whole level is
+// walked and its surfaces marked every frame, on one CPU thread (user-reported lag 2026-10-05,
+// VrApi reported 36/72fps with the GPU only ~47% busy). PVS is position-based, so it cannot hide
+// a wall near the viewer on its own; keep it on and fall back to vr_novis 1 only if the sky
+// bleeds through walls again.
+cvar_t vr_novis = {CF_CLIENT | CF_ARCHIVE, "vr_novis","0", "VR: 1 bypasses the map's precomputed PVS and draws every frustum-visible leaf (slow; workaround for background bleeding through walls), 0 uses the PVS like the desktop engine"};
+#endif
+cvar_t r_reflectcube_neutral = {CF_CLIENT | CF_ARCHIVE, "r_reflectcube_neutral","0.25", "brightness of the neutral cubemap that r_reflectcube 0 substitutes (0 = no reflection at all, 1 = the old pure white). The reflection is ADDED to the diffuse texture, so 1 blows out materials with a bright reflectmask - Xonotic's weapon models especially (VR: user-reported white/overbright weapons 2026-10-05)"};
 cvar_t r_tcgen_environment = {CF_CLIENT | CF_ARCHIVE, "r_tcgen_environment","1", "allow Q3 shader scripts to spheremap-reflect the environment onto \"tcGen environment\" surfaces (chrome/glass trim); 0 disables it (VR: reads as background bleeding through walls)"};
 cvar_t r_drawviewmodel = {CF_CLIENT, "r_drawviewmodel","1", "draw your weapon model"};
 cvar_t r_drawexteriormodel = {CF_CLIENT, "r_drawexteriormodel","1", "draw your player model (e.g. in chase cam, reflections)"};
@@ -411,6 +421,27 @@ static void R_BuildWhiteCube(void)
 	unsigned char data[6*1*1*4];
 	memset(data, 255, sizeof(data));
 	r_texture_whitecube = R_LoadTextureCubeMap(r_main_texturepool, "whitecube", 1, data, TEXTYPE_BGRA, TEXF_CLAMP | TEXF_PERSISTENT, -1, NULL);
+}
+
+// The cubemap r_reflectcube 0 substitutes for the material's own (usually sky) one. Kept
+// separate from r_texture_whitecube, which the rtlight code uses as its "no cubemap" marker
+// and compares pointers against. Rebuilt when r_reflectcube_neutral changes.
+static rtexture_t *r_texture_neutralcube;
+static float r_texture_neutralcube_level = -1;
+
+static rtexture_t *R_GetNeutralReflectCube(void)
+{
+	float level = bound(0.0f, r_reflectcube_neutral.value, 1.0f);
+	if (!r_texture_neutralcube || r_texture_neutralcube_level != level)
+	{
+		unsigned char data[6*1*1*4];
+		if (r_texture_neutralcube)
+			R_FreeTexture(r_texture_neutralcube);
+		memset(data, (int)(level * 255.0f + 0.5f), sizeof(data));
+		r_texture_neutralcube = R_LoadTextureCubeMap(r_main_texturepool, "neutralreflectcube", 1, data, TEXTYPE_BGRA, TEXF_CLAMP | TEXF_PERSISTENT, -1, NULL);
+		r_texture_neutralcube_level = level;
+	}
+	return r_texture_neutralcube;
 }
 
 static void R_BuildNormalizationCube(void)
@@ -2143,7 +2174,7 @@ void R_SetupShader_Surface(const float rtlightambient[3], const float rtlightdif
 		if (r_glsl_permutation->tex_Texture_Pants           >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_Pants            , t->pantstexture                      );
 		if (r_glsl_permutation->tex_Texture_Shirt           >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_Shirt            , t->shirttexture                      );
 		if (r_glsl_permutation->tex_Texture_ReflectMask     >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_ReflectMask      , t->reflectmasktexture                );
-		if (r_glsl_permutation->tex_Texture_ReflectCube     >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_ReflectCube      , (r_reflectcube.integer && t->reflectcubetexture) ? t->reflectcubetexture : r_texture_whitecube);
+		if (r_glsl_permutation->tex_Texture_ReflectCube     >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_ReflectCube      , (r_reflectcube.integer && t->reflectcubetexture) ? t->reflectcubetexture : R_GetNeutralReflectCube());
 		if (r_glsl_permutation->tex_Texture_FogHeightTexture>= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_FogHeightTexture , r_texture_fogheighttexture                          );
 		if (r_glsl_permutation->tex_Texture_FogMask         >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_FogMask          , r_texture_fogattenuation                            );
 		if (r_glsl_permutation->tex_Texture_Lightmap        >= 0) R_Mesh_TexBind(r_glsl_permutation->tex_Texture_Lightmap         , rsurface.lightmaptexture ? rsurface.lightmaptexture : r_texture_white);
@@ -3136,6 +3167,8 @@ static void gl_main_start(void)
 	r_texture_grey128 = NULL;
 	r_texture_black = NULL;
 	r_texture_whitecube = NULL;
+	r_texture_neutralcube = NULL;
+	r_texture_neutralcube_level = -1;
 	r_texture_normalizationcube = NULL;
 	r_texture_fogattenuation = NULL;
 	r_texture_fogheighttexture = NULL;
@@ -3267,6 +3300,8 @@ static void gl_main_shutdown(void)
 	r_texture_grey128 = NULL;
 	r_texture_black = NULL;
 	r_texture_whitecube = NULL;
+	r_texture_neutralcube = NULL;
+	r_texture_neutralcube_level = -1;
 	r_texture_normalizationcube = NULL;
 	r_texture_fogattenuation = NULL;
 	r_texture_fogheighttexture = NULL;
@@ -3367,6 +3402,10 @@ void GL_Main_Init(void)
 	Cvar_RegisterVariable(&r_draw2d);
 	Cvar_RegisterVariable(&r_drawworld);
 	Cvar_RegisterVariable(&r_reflectcube);
+	Cvar_RegisterVariable(&r_reflectcube_neutral);
+#ifdef VR_QUEST
+	Cvar_RegisterVariable(&vr_novis);
+#endif
 	Cvar_RegisterVariable(&r_tcgen_environment);
 	Cvar_RegisterVariable(&r_cullentities_trace);
 	Cvar_RegisterVariable(&r_cullentities_trace_entityocclusion);
@@ -4484,7 +4523,7 @@ static void R_View_Update(const int *myscissor)
 	// the same day) - nearby walls just outside the PVS set for the exact eye position were
 	// never drawn at all, so the sky (drawn first, see r_sky.c) stayed visible through them.
 #ifdef VR_QUEST
-	R_View_WorldVisibility(VRH_Available() || !r_refdef.view.usevieworiginculling);
+	R_View_WorldVisibility((VRH_Available() && vr_novis.integer) || !r_refdef.view.usevieworiginculling);
 #else
 	R_View_WorldVisibility(!r_refdef.view.usevieworiginculling);
 #endif
