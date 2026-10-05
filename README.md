@@ -117,9 +117,9 @@ adb shell "echo '-xonotic -basedir /sdcard/XonoticVR -nohome +exec vr.cfg +exec 
 
 ## Multiplayer
 
-The server browser works as it does on desktop, and the port uses the standard Xonotic 0.8.6 data,
-so you can join public servers and play against desktop players. Bots work offline too — start a
-match from the menu.
+The port ships the standard Xonotic 0.8.6 data and uses the game's own server browser, so joining
+public servers works the same way it does on desktop. Offline matches against bots work too — start
+one from the menu.
 
 ## Troubleshooting
 
