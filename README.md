@@ -39,6 +39,8 @@ minutes and only happens once. The game then starts by itself. Find it under
 
 ## Controls
 
+![Xonotic VR controller mapping](docs/controls.webp)
+
 Defaults for right-handed play (set `cl_righthanded 0` to swap hands).
 
 | Aim hand (right) | |
