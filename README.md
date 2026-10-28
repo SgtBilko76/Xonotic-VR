@@ -1,5 +1,7 @@
 # Xonotic VR
 
+**Download, install guide, controls and pictures: [portroyale.online/xonotic.html](https://portroyale.online/xonotic.html)**
+
 [![Sponsor](https://img.shields.io/badge/Sponsor-SgtBilko76-ea4aaa?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/SgtBilko76)
 
 **[Xonotic](https://xonotic.org/) — "The Free and Fast Arena Shooter" — standalone in VR on Meta Quest and Pico.**
